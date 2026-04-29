@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-npc-postgres
+    environment:
+      POSTGRES_DB: ai_npc
+      POSTGRES_USER: ai_npc
+      POSTGRES_PASSWORD: ai_npc_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_npc -d ai_npc"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ai-npc-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8787
+      DATABASE_URL: postgres://ai_npc:ai_npc_pass@postgres:5432/ai_npc
+      PG_SSL: "false"
+      API_KEY: change-me-service-key
+      JWT_SECRET: change-me-jwt-secret
+      OPENAI_API_KEY: ""
+      OPENAI_STT_MODEL: gpt-4o-mini-transcribe
+      OPENAI_TTS_MODEL: gpt-4o-mini-tts
+      OPENAI_TTS_VOICE: alloy
+    ports:
+      - "8787:8787"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8787/v1
+        VITE_WS_URL: ws://localhost:8787/v1/realtime
+        VITE_API_KEY: change-me-service-key
+    container_name: ai-npc-web
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres_data:
