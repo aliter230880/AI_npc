@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_npc}
+      POSTGRES_USER: ${POSTGRES_USER:-ai_npc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_npc} -d ${POSTGRES_DB:-ai_npc}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8787
+      DATABASE_URL: postgres://${POSTGRES_USER:-ai_npc}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_npc}
+      PG_SSL: "false"
+      API_KEY: ${API_KEY:?set API_KEY}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_TTS_MODEL: ${OPENAI_TTS_MODEL:-gpt-4o-mini-tts}
+      OPENAI_TTS_VOICE: ${OPENAI_TTS_VOICE:-alloy}
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?set VITE_API_BASE_URL}
+        VITE_WS_URL: ${VITE_WS_URL:?set VITE_WS_URL}
+        VITE_API_KEY: ${VITE_API_KEY:?set VITE_API_KEY}
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:?set WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data_prod:
+  caddy_data:
+  caddy_config:
