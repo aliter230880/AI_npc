@@ -4,11 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
     "dev:backend": "node backend/server.mjs",
-    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev\"",
-    "start": "node backend/server.mjs"
+    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev\""
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
