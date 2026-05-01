@@ -1,10 +1,6 @@
 name: 🤖 AI NPC Auto-Update
 
 on:
-  # Запуск по команде через issue с меткой "update"
-  issues:
-    types: [labeled]
-  # Запуск вручную через Actions tab
   workflow_dispatch:
     inputs:
       update_type:
@@ -22,26 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: write
     
     steps:
       - name: 📥 Clone repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: 📝 Create update log
+      - name: 📁 Create directory structure
         run: |
-          echo "🔄 Update started at $(date)" > UPDATE_LOG.md
-          echo "" >> UPDATE_LOG.md
-
-      - name: 🎯 Generate project files
-        run: |
-          # Создаём структуру папок
           mkdir -p gpt5.3-ai-npc-platform/backend
           mkdir -p gpt5.3-ai-npc-platform/src
-          
-          # package.json
+
+      - name: 📝 Create package.json
+        run: |
           cat > gpt5.3-ai-npc-platform/package.json << 'EOF'
           {
             "name": "ai-npc-platform",
@@ -57,107 +45,46 @@ jobs:
             },
             "dependencies": {
               "@fastify/cors": "^11.2.0",
-              "@fastify/rate-limit": "^10.3.0",
-              "@fastify/websocket": "^11.2.0",
-              "bcryptjs": "^3.0.3",
-              "clsx": "2.1.1",
               "fastify": "^5.8.5",
-              "framer-motion": "^12.38.0",
-              "jsonwebtoken": "^9.0.3",
               "openai": "^4.80.0",
-              "pg": "^8.20.0",
               "react": "19.2.3",
-              "react-dom": "19.2.3",
-              "tailwind-merge": "3.4.0"
+              "react-dom": "19.2.3"
             },
             "devDependencies": {
-              "@tailwindcss/vite": "4.1.17",
-              "@types/node": "22.19.17",
-              "@types/react": "19.2.7",
-              "@types/react-dom": "19.2.3",
               "@vitejs/plugin-react": "5.1.1",
               "concurrently": "^9.1.0",
-              "tailwindcss": "4.1.17",
-              "typescript": "5.9.3",
               "vite": "7.2.4"
             }
           }
           EOF
 
-          # .env.example
-          cat > gpt5.3-ai-npc-platform/backend/.env.example << 'EOF'
-          # AI_NPC Configuration
-          PORT=8787
-          DATABASE_URL=postgres://ai_npc:ai_npc_pass@localhost:5432/ai_npc
-          API_KEY=change-me-service-key
-          JWT_SECRET=change-me-jwt-secret
-          
-          # === ВСТАВЬТЕ СЮДА ВАШ OPENAI API KEY ===
-          OPENAI_API_KEY=sk-your-key-here
-          OPENAI_MODEL=gpt-4o-mini
-          EOF
-
-          # server.mjs (backend)
+      - name: 📝 Create backend server
+        run: |
           cat > gpt5.3-ai-npc-platform/backend/server.mjs << 'EOF'
           import Fastify from "fastify";
           import cors from "@fastify/cors";
-          import websocket from "@fastify/websocket";
           import { randomUUID } from "node:crypto";
-          import OpenAI from "openai";
 
           const app = Fastify({ logger: false });
           const port = process.env.PORT || 8787;
-          const openAiKey = process.env.OPENAI_API_KEY || "";
-          
-          let openai = null;
-          if (openAiKey && openAiKey !== "sk-your-key-here") {
-            openai = new OpenAI({ apiKey: openAiKey });
-          }
 
           await app.register(cors, { origin: true });
-          await app.register(websocket);
 
           const characters = [
-            { id: "mara", name: "Mara Archivist", role: "Lore Guide", tone: "Calm", 
-              systemPrompt: "You are Mara Archivist, a lore guide. Speak calmly." },
-            { id: "rook", name: "Captain Rook", role: "Commander", tone: "Direct",
-              systemPrompt: "You are Captain Rook, a squad commander. Be direct." },
-            { id: "vexa", name: "Vexa Vale", role: "Merchant", tone: "Friendly",
-              systemPrompt: "You are Vexa Vale, a friendly merchant." }
+            { id: "mara", name: "Mara Archivist", role: "Lore Guide" },
+            { id: "rook", name: "Captain Rook", role: "Commander" },
+            { id: "vexa", name: "Vexa Vale", role: "Merchant" }
           ];
 
           const sessions = new Map();
-          const messages = new Map();
 
-          async function generateResponse(character, userText, history) {
-            if (!openai) {
-              return `[${character.name}]: Привет! Я ${character.role}. (Настройте OPENAI_API_KEY для AI ответов)`;
-            }
-            try {
-              const completion = await openai.chat.completions.create({
-                model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-                messages: [
-                  { role: "system", content: character.systemPrompt },
-                  ...history.slice(-5).map(m => ({ role: m.role === "npc" ? "assistant" : m.role, content: m.content })),
-                  { role: "user", content: userText }
-                ],
-                temperature: 0.7,
-                max_tokens: 300
-              });
-              return completion.choices[0].message.content;
-            } catch (e) {
-              return `[${character.name}]: Ошибка AI: ${e.message}`;
-            }
-          }
-
-          app.get("/health", async () => ({ status: "ok", llm: openai ? "ready" : "demo-mode", updated: new Date().toISOString() }));
+          app.get("/health", async () => ({ status: "ok", updated: new Date().toISOString() }));
           app.get("/v1/characters", async () => characters);
 
           app.post("/v1/sessions", async (req) => {
             const { characterId } = req.body || {};
             const session = { id: randomUUID(), characterId, createdAt: new Date().toISOString() };
             sessions.set(session.id, session);
-            messages.set(session.id, []);
             return session;
           });
 
@@ -165,239 +92,70 @@ jobs:
             const { sessionId, text } = req.body || {};
             const session = sessions.get(sessionId);
             if (!session) return { error: "Session not found" };
-            
             const character = characters.find(c => c.id === session.characterId);
-            const history = messages.get(sessionId) || [];
-            const reply = await generateResponse(character, text, history);
-            
-            const msg = { id: randomUUID(), sessionId, role: "npc", content: reply, createdAt: new Date().toISOString() };
-            const msgs = messages.get(sessionId) || [];
-            msgs.push(msg);
-            messages.set(sessionId, msgs);
-            return msg;
-          });
-
-          app.get("/v1/realtime", { websocket: true }, (conn) => {
-            conn.send(JSON.stringify({ type: "ready", message: "Connected" }));
-            conn.on("message", async (raw) => {
-              try {
-                const payload = JSON.parse(String(raw));
-                const session = sessions.get(payload.sessionId);
-                if (!session) {
-                  conn.send(JSON.stringify({ type: "error", message: "Session not found" }));
-                  return;
-                }
-                const character = characters.find(c => c.id === session.characterId);
-                const history = messages.get(session.id) || [];
-                const reply = await generateResponse(character, payload.text || "", history);
-                
-                conn.send(JSON.stringify({ type: "transcript", source: "user", text: payload.text }));
-                conn.send(JSON.stringify({ type: "chunk", text: reply }));
-                conn.send(JSON.stringify({ type: "final", message: { content: reply } }));
-              } catch {
-                conn.send(JSON.stringify({ type: "error", message: "Invalid payload" }));
-              }
-            });
+            return { 
+              id: randomUUID(), 
+              sessionId, 
+              role: "npc", 
+              content: `[${character?.name}]: Привет! Я ${character?.role}.`,
+              createdAt: new Date().toISOString()
+            };
           });
 
           app.listen({ port, host: "0.0.0.0" }, () => {
-            console.log(`🚀 AI_NPC API: http://localhost:${port}`);
-            console.log(`📡 LLM: ${openai ? "✅ OpenAI Ready" : "⚠️ Demo Mode"}`);
+            console.log(`🚀 AI_NPC API running on http://localhost:${port}`);
           });
           EOF
 
-          # index.html (frontend)
+      - name: 📝 Create index.html
+        run: |
           cat > gpt5.3-ai-npc-platform/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="ru">
           <head>
             <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>AI NPC Platform</title>
             <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #fff; }
-              .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
-              header { text-align: center; margin-bottom: 40px; }
-              h1 { font-size: 3em; margin-bottom: 10px; background: linear-gradient(90deg, #00d9ff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-              .status { display: inline-block; padding: 8px 16px; background: rgba(0,255,136,0.1); border: 1px solid #00ff88; border-radius: 20px; color: #00ff88; margin-top: 20px; }
-              .characters { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 40px; }
-              .character-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; transition: transform 0.3s; cursor: pointer; }
-              .character-card:hover { transform: translateY(-5px); border-color: #00d9ff; }
-              .character-name { font-size: 1.5em; margin-bottom: 8px; color: #00d9ff; }
-              .character-role { color: #8892b0; margin-bottom: 16px; }
-              .chat-section { margin-top: 40px; background: rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; display: none; }
-              .chat-section.active { display: block; }
-              .chat-messages { height: 400px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-              .message { margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; max-width: 80%; }
-              .message.user { background: #0066cc; margin-left: auto; }
-              .message.npc { background: rgba(0,255,136,0.2); border-left: 3px solid #00ff88; }
-              .chat-input { display: flex; gap: 12px; }
-              .chat-input input { flex: 1; padding: 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; font-size: 1em; }
-              .chat-input button { padding: 16px 32px; background: linear-gradient(90deg, #00d9ff, #00ff88); border: none; border-radius: 12px; color: #1a1a2e; font-weight: bold; cursor: pointer; }
+              body { font-family: sans-serif; background: #1a1a2e; color: #fff; padding: 40px; }
+              h1 { color: #00d9ff; }
+              .card { background: rgba(255,255,255,0.1); padding: 20px; margin: 10px; border-radius: 10px; display: inline-block; }
             </style>
           </head>
           <body>
-            <div class="container">
-              <header>
-                <h1>🤖 AI NPC Platform</h1>
-                <p>Интерактивные персонажи с искусственным интеллектом</p>
-                <div class="status" id="status">🔄 Подключение...</div>
-              </header>
-              <h2 style="margin-bottom: 20px;">Выберите персонажа:</h2>
-              <div class="characters" id="characters"></div>
-              <div class="chat-section" id="chatSection">
-                <h2 id="chatTitle" style="margin-bottom: 20px;"></h2>
-                <div class="chat-messages" id="chatMessages"></div>
-                <div class="chat-input">
-                  <input type="text" id="messageInput" placeholder="Напишите сообщение..." />
-                  <button onclick="sendMessage()">Отправить</button>
-                </div>
-              </div>
-            </div>
+            <h1>🤖 AI NPC Platform</h1>
+            <div id="status">🔄 Loading...</div>
+            <div id="characters" style="margin-top: 40px;"></div>
             <script>
-              const API_BASE = 'http://localhost:8787';
-              let currentSession = null;
-              async function checkStatus() {
-                try {
-                  const res = await fetch(`${API_BASE}/health`);
-                  const data = await res.json();
-                  document.getElementById('status').innerHTML = `✅ API Ready | LLM: ${data.llm} | Updated: ${data.updated || 'N/A'}`;
-                } catch { document.getElementById('status').innerHTML = '❌ API Offline'; }
-              }
-              async function loadCharacters() {
-                try {
-                  const res = await fetch(`${API_BASE}/v1/characters`);
-                  const chars = await res.json();
+              fetch('http://localhost:8787/health')
+                .then(r => r.json())
+                .then(d => document.getElementById('status').innerText = '✅ API Ready | Updated: ' + d.updated)
+                .catch(() => document.getElementById('status').innerText = '❌ API Offline');
+              
+              fetch('http://localhost:8787/v1/characters')
+                .then(r => r.json())
+                .then(chars => {
                   document.getElementById('characters').innerHTML = chars.map(c => 
-                    `<div class="character-card" onclick="selectCharacter('${c.id}', '${c.name}')">
-                      <div class="character-name">${c.name}</div>
-                      <div class="character-role">${c.role}</div>
-                    </div>`
+                    '<div class="card"><h3>' + c.name + '</h3><p>' + c.role + '</p></div>'
                   ).join('');
-                } catch { document.getElementById('characters').innerHTML = '<p>Ошибка. Запустите backend.</p>'; }
-              }
-              function selectCharacter(id, name) {
-                document.getElementById('chatSection').classList.add('active');
-                document.getElementById('chatTitle').textContent = `💬 Диалог с ${name}`;
-                document.getElementById('chatMessages').innerHTML = '<p>Начните диалог...</p>';
-                startSession(id);
-              }
-              async function startSession(characterId) {
-                try {
-                  const res = await fetch(`${API_BASE}/v1/sessions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ characterId })
-                  });
-                  currentSession = await res.json();
-                } catch (e) { alert('Ошибка: ' + e.message); }
-              }
-              async function sendMessage() {
-                const input = document.getElementById('messageInput');
-                const text = input.value.trim();
-                if (!text || !currentSession) return;
-                const messagesDiv = document.getElementById('chatMessages');
-                if (messagesDiv.querySelector('p')) messagesDiv.innerHTML = '';
-                messagesDiv.innerHTML += `<div class="message user">${text}</div>`;
-                input.value = '';
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                try {
-                  const res = await fetch(`${API_BASE}/v1/messages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId: currentSession.id, text })
-                  });
-                  const data = await res.json();
-                  messagesDiv.innerHTML += `<div class="message npc">${data.content}</div>`;
-                  messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                } catch (e) { messagesDiv.innerHTML += `<div class="message npc">Ошибка: ${e.message}</div>`; }
-              }
-              document.getElementById('messageInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
-              checkStatus();
-              loadCharacters();
+                });
             </script>
           </body>
           </html>
           EOF
 
-          # .gitignore
-          cat > .gitignore << 'EOF'
-          node_modules/
-          .env
-          dist/
-          *.log
-          EOF
-
-          # README.md
-          cat > README.md << 'EOF'
-          # 🤖 AI NPC Platform
-          
-          Интерактивные персонажи с искусственным интеллектом.
-          
-          ## Быстрый старт
-          
-          ```bash
-          npm install
-          cp gpt5.3-ai-npc-platform/backend/.env.example gpt5.3-ai-npc-platform/backend/.env
-          # Отредактируйте .env и добавьте OPENAI_API_KEY
-          npm run dev:all
-          ```
-          
-          ## Ссылки
-          
-          - API: http://localhost:8787/health
-          - Web: http://localhost:5173
-          
-          ## Обновление через GitHub Actions
-          
-          1. Создайте Issue с меткой "update"
-          2. Или запустите Actions вручную
-          3. Скачайте обновлённые файлы
-          EOF
-
-          echo "✅ Files generated successfully"
-
-      - name: 💾 Commit and push changes
+      - name: 💾 Commit and push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff --staged --quiet || git commit -m "🤖 Auto-update: $(date '+%Y-%m-%d %H:%M:%S')"
+          git diff --staged --quiet || git commit -m "🤖 Auto-update project files"
           git push
 
-      - name: 📝 Update log
-        run: |
-          echo "" >> UPDATE_LOG.md
-          echo "✅ Update completed at $(date)" >> UPDATE_LOG.md
-          echo "" >> UPDATE_LOG.md
-          echo "📥 Download latest version:" >> UPDATE_LOG.md
-          echo "   - Click 'Code' → 'Download ZIP' on GitHub" >> UPDATE_LOG.md
-          echo "   - Or run: git pull" >> UPDATE_LOG.md
-
-      - name: 💬 Comment on issue (if triggered by issue)
-        if: github.event_name == 'issues'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '✅ **Update completed!**\n\n📥 Download latest version:\n- Click "Code" → "Download ZIP"\n- Or run: `git pull`\n\n📝 See UPDATE_LOG.md for details.'
-            });
-
-      - name: 🎉 Summary
+      - name: ✅ Complete
         run: |
           echo "╔════════════════════════════════════════════════════════╗"
-          echo "║           ✅ Update completed successfully!            ║"
+          echo "║           ✅ Update completed!                         ║"
           echo "╚════════════════════════════════════════════════════════╝"
           echo ""
-          echo "📥 To download:"
-          echo "   1. Click 'Code' button on GitHub"
-          echo "   2. Select 'Download ZIP'"
-          echo "   3. Extract to E:\AI\AI_folder"
-          echo ""
-          echo "📝 Or via Git:"
-          echo "   cd E:\AI\AI_folder"
-          echo "   git pull"
+          echo "📥 Download: Click 'Code' → 'Download ZIP'"
+          echo "📝 Or run: git pull"
