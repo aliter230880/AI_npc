@@ -2,46 +2,28 @@ name: 🤖 AI NPC Auto-Update
 
 on:
   workflow_dispatch:
-    inputs:
-      update_type:
-        description: 'Тип обновления'
-        required: true
-        default: 'full'
-        type: choice
-        options:
-          - full
-          - backend
-          - frontend
 
 jobs:
-  update-project:
+  update:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     
     steps:
-      - name: 📥 Clone repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 📁 Create directory structure
+      - name: Create files
         run: |
           mkdir -p gpt5.3-ai-npc-platform/backend
-          mkdir -p gpt5.3-ai-npc-platform/src
-
-      - name: 📝 Create package.json
-        run: |
-          cat > gpt5.3-ai-npc-platform/package.json << 'EOF'
-          {
+          
+          echo '{
             "name": "ai-npc-platform",
             "private": true,
             "version": "1.0.0",
             "type": "module",
             "scripts": {
-              "dev": "vite",
-              "build": "vite build",
               "dev:backend": "node backend/server.mjs",
-              "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev\"",
-              "start": "node backend/server.mjs"
+              "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev\""
             },
             "dependencies": {
               "@fastify/cors": "^11.2.0",
@@ -55,107 +37,45 @@ jobs:
               "concurrently": "^9.1.0",
               "vite": "7.2.4"
             }
-          }
-          EOF
+          }' > gpt5.3-ai-npc-platform/package.json
 
-      - name: 📝 Create backend server
-        run: |
-          cat > gpt5.3-ai-npc-platform/backend/server.mjs << 'EOF'
-          import Fastify from "fastify";
+          echo 'import Fastify from "fastify";
           import cors from "@fastify/cors";
           import { randomUUID } from "node:crypto";
-
           const app = Fastify({ logger: false });
           const port = process.env.PORT || 8787;
-
           await app.register(cors, { origin: true });
-
           const characters = [
             { id: "mara", name: "Mara Archivist", role: "Lore Guide" },
             { id: "rook", name: "Captain Rook", role: "Commander" },
             { id: "vexa", name: "Vexa Vale", role: "Merchant" }
           ];
-
           const sessions = new Map();
-
           app.get("/health", async () => ({ status: "ok", updated: new Date().toISOString() }));
           app.get("/v1/characters", async () => characters);
-
           app.post("/v1/sessions", async (req) => {
             const { characterId } = req.body || {};
             const session = { id: randomUUID(), characterId, createdAt: new Date().toISOString() };
             sessions.set(session.id, session);
             return session;
           });
-
           app.post("/v1/messages", async (req) => {
             const { sessionId, text } = req.body || {};
             const session = sessions.get(sessionId);
             if (!session) return { error: "Session not found" };
             const character = characters.find(c => c.id === session.characterId);
-            return { 
-              id: randomUUID(), 
-              sessionId, 
-              role: "npc", 
-              content: `[${character?.name}]: Привет! Я ${character?.role}.`,
-              createdAt: new Date().toISOString()
-            };
+            return { id: randomUUID(), sessionId, role: "npc", content: "[" + character?.name + "]: Привет!", createdAt: new Date().toISOString() };
           });
+          app.listen({ port, host: "0.0.0.0" }, () => { console.log("🚀 API: http://localhost:" + port); });' > gpt5.3-ai-npc-platform/backend/server.mjs
 
-          app.listen({ port, host: "0.0.0.0" }, () => {
-            console.log(`🚀 AI_NPC API running on http://localhost:${port}`);
-          });
-          EOF
+          echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AI NPC</title></head><body><h1>🤖 AI NPC Platform</h1><div id="s">Loading...</div><script>fetch("http://localhost:8787/health").then(r=>r.json()).then(d=>document.getElementById("s").innerText="✅ Ready: "+d.updated).catch(()=>document.getElementById("s").innerText="❌ Offline");</script></body></html>' > gpt5.3-ai-npc-platform/index.html
 
-      - name: 📝 Create index.html
-        run: |
-          cat > gpt5.3-ai-npc-platform/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html lang="ru">
-          <head>
-            <meta charset="UTF-8">
-            <title>AI NPC Platform</title>
-            <style>
-              body { font-family: sans-serif; background: #1a1a2e; color: #fff; padding: 40px; }
-              h1 { color: #00d9ff; }
-              .card { background: rgba(255,255,255,0.1); padding: 20px; margin: 10px; border-radius: 10px; display: inline-block; }
-            </style>
-          </head>
-          <body>
-            <h1>🤖 AI NPC Platform</h1>
-            <div id="status">🔄 Loading...</div>
-            <div id="characters" style="margin-top: 40px;"></div>
-            <script>
-              fetch('http://localhost:8787/health')
-                .then(r => r.json())
-                .then(d => document.getElementById('status').innerText = '✅ API Ready | Updated: ' + d.updated)
-                .catch(() => document.getElementById('status').innerText = '❌ API Offline');
-              
-              fetch('http://localhost:8787/v1/characters')
-                .then(r => r.json())
-                .then(chars => {
-                  document.getElementById('characters').innerHTML = chars.map(c => 
-                    '<div class="card"><h3>' + c.name + '</h3><p>' + c.role + '</p></div>'
-                  ).join('');
-                });
-            </script>
-          </body>
-          </html>
-          EOF
-
-      - name: 💾 Commit and push
+      - name: Push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff --staged --quiet || git commit -m "🤖 Auto-update project files"
+          git commit -m "🤖 Auto-update" || echo "No changes"
           git push
 
-      - name: ✅ Complete
-        run: |
-          echo "╔════════════════════════════════════════════════════════╗"
-          echo "║           ✅ Update completed!                         ║"
-          echo "╚════════════════════════════════════════════════════════╝"
-          echo ""
-          echo "📥 Download: Click 'Code' → 'Download ZIP'"
-          echo "📝 Or run: git pull"
+      - run: echo "✅ DONE! Download via Code → Download ZIP"
