@@ -1,1 +1,242 @@
+name: 🤖 AI NPC Auto-Update
+
+on:
+  # Запуск по команде через issue с меткой "update"
+  issues:
+    types: [labeled]
+  # Запуск вручную через Actions tab
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Тип обновления'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - backend
+          - frontend
+
+jobs:
+  update-project:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    
+    steps:
+      - name: 📥 Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📝 Create update log
+        run: |
+          echo "🔄 Update started at $(date)" > UPDATE_LOG.md
+          echo "" >> UPDATE_LOG.md
+
+      - name: 🎯 Generate project files
+        run: |
+          # Создаём структуру папок
+          mkdir -p gpt5.3-ai-npc-platform/backend
+          mkdir -p gpt5.3-ai-npc-platform/src
+          
+          # package.json
+          cat > gpt5.3-ai-npc-platform/package.json << 'EOF'
+          {
+            "name": "ai-npc-platform",
+            "private": true,
+            "version": "1.0.0",
+            "type": "module",
+            "scripts": {
+              "dev": "vite",
+              "build": "vite build",
+              "dev:backend": "node backend/server.mjs",
+              "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev\"",
+              "start": "node backend/server.mjs"
+            },
+            "dependencies": {
+              "@fastify/cors": "^11.2.0",
+              "@fastify/rate-limit": "^10.3.0",
+              "@fastify/websocket": "^11.2.0",
+              "bcryptjs": "^3.0.3",
+              "clsx": "2.1.1",
+              "fastify": "^5.8.5",
+              "framer-motion": "^12.38.0",
+              "jsonwebtoken": "^9.0.3",
+              "openai": "^4.80.0",
+              "pg": "^8.20.0",
+              "react": "19.2.3",
+              "react-dom": "19.2.3",
+              "tailwind-merge": "3.4.0"
+            },
+            "devDependencies": {
+              "@tailwindcss/vite": "4.1.17",
+              "@types/node": "22.19.17",
+              "@types/react": "19.2.7",
+              "@types/react-dom": "19.2.3",
+              "@vitejs/plugin-react": "5.1.1",
+              "concurrently": "^9.1.0",
+              "tailwindcss": "4.1.17",
+              "typescript": "5.9.3",
+              "vite": "7.2.4"
+            }
+          }
+          EOF
+
+          # .env.example
+          cat > gpt5.3-ai-npc-platform/backend/.env.example << 'EOF'
+          # AI_NPC Configuration
+          PORT=8787
+          DATABASE_URL=postgres://ai_npc:ai_npc_pass@localhost:5432/ai_npc
+          API_KEY=change-me-service-key
+          JWT_SECRET=change-me-jwt-secret
+          
+          # === ВСТАВЬТЕ СЮДА ВАШ OPENAI API KEY ===
+          OPENAI_API_KEY=sk-your-key-here
+          OPENAI_MODEL=gpt-4o-mini
+          EOF
+
+          # server.mjs (backend)
+          cat > gpt5.3-ai-npc-platform/backend/server.mjs << 'EOF'
+          import Fastify from "fastify";
+          import cors from "@fastify/cors";
+          import websocket from "@fastify/websocket";
+          import { randomUUID } from "node:crypto";
+          import OpenAI from "openai";
+
+          const app = Fastify({ logger: false });
+          const port = process.env.PORT || 8787;
+          const openAiKey = process.env.OPENAI_API_KEY || "";
+          
+          let openai = null;
+          if (openAiKey && openAiKey !== "sk-your-key-here") {
+            openai = new OpenAI({ apiKey: openAiKey });
+          }
+
+          await app.register(cors, { origin: true });
+          await app.register(websocket);
+
+          const characters = [
+            { id: "mara", name: "Mara Archivist", role: "Lore Guide", tone: "Calm", 
+              systemPrompt: "You are Mara Archivist, a lore guide. Speak calmly." },
+            { id: "rook", name: "Captain Rook", role: "Commander", tone: "Direct",
+              systemPrompt: "You are Captain Rook, a squad commander. Be direct." },
+            { id: "vexa", name: "Vexa Vale", role: "Merchant", tone: "Friendly",
+              systemPrompt: "You are Vexa Vale, a friendly merchant." }
+          ];
+
+          const sessions = new Map();
+          const messages = new Map();
+
+          async function generateResponse(character, userText, history) {
+            if (!openai) {
+              return `[${character.name}]: Привет! Я ${character.role}. (Настройте OPENAI_API_KEY для AI ответов)`;
+            }
+            try {
+              const completion = await openai.chat.completions.create({
+                model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+                messages: [
+                  { role: "system", content: character.systemPrompt },
+                  ...history.slice(-5).map(m => ({ role: m.role === "npc" ? "assistant" : m.role, content: m.content })),
+                  { role: "user", content: userText }
+                ],
+                temperature: 0.7,
+                max_tokens: 300
+              });
+              return completion.choices[0].message.content;
+            } catch (e) {
+              return `[${character.name}]: Ошибка AI: ${e.message}`;
+            }
+          }
+
+          app.get("/health", async () => ({ status: "ok", llm: openai ? "ready" : "demo-mode", updated: new Date().toISOString() }));
+          app.get("/v1/characters", async () => characters);
+
+          app.post("/v1/sessions", async (req) => {
+            const { characterId } = req.body || {};
+            const session = { id: randomUUID(), characterId, createdAt: new Date().toISOString() };
+            sessions.set(session.id, session);
+            messages.set(session.id, []);
+            return session;
+          });
+
+          app.post("/v1/messages", async (req) => {
+            const { sessionId, text } = req.body || {};
+            const session = sessions.get(sessionId);
+            if (!session) return { error: "Session not found" };
+            
+            const character = characters.find(c => c.id === session.characterId);
+            const history = messages.get(sessionId) || [];
+            const reply = await generateResponse(character, text, history);
+            
+            const msg = { id: randomUUID(), sessionId, role: "npc", content: reply, createdAt: new Date().toISOString() };
+            const msgs = messages.get(sessionId) || [];
+            msgs.push(msg);
+            messages.set(sessionId, msgs);
+            return msg;
+          });
+
+          app.get("/v1/realtime", { websocket: true }, (conn) => {
+            conn.send(JSON.stringify({ type: "ready", message: "Connected" }));
+            conn.on("message", async (raw) => {
+              try {
+                const payload = JSON.parse(String(raw));
+                const session = sessions.get(payload.sessionId);
+                if (!session) {
+                  conn.send(JSON.stringify({ type: "error", message: "Session not found" }));
+                  return;
+                }
+                const character = characters.find(c => c.id === session.characterId);
+                const history = messages.get(session.id) || [];
+                const reply = await generateResponse(character, payload.text || "", history);
+                
+                conn.send(JSON.stringify({ type: "transcript", source: "user", text: payload.text }));
+                conn.send(JSON.stringify({ type: "chunk", text: reply }));
+                conn.send(JSON.stringify({ type: "final", message: { content: reply } }));
+              } catch {
+                conn.send(JSON.stringify({ type: "error", message: "Invalid payload" }));
+              }
+            });
+          });
+
+          app.listen({ port, host: "0.0.0.0" }, () => {
+            console.log(`🚀 AI_NPC API: http://localhost:${port}`);
+            console.log(`📡 LLM: ${openai ? "✅ OpenAI Ready" : "⚠️ Demo Mode"}`);
+          });
+          EOF
+
+          # index.html (frontend)
+          cat > gpt5.3-ai-npc-platform/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="ru">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>AI NPC Platform</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #fff; }
+              .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+              header { text-align: center; margin-bottom: 40px; }
+              h1 { font-size: 3em; margin-bottom: 10px; background: linear-gradient(90deg, #00d9ff, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+              .status { display: inline-block; padding: 8px 16px; background: rgba(0,255,136,0.1); border: 1px solid #00ff88; border-radius: 20px; color: #00ff88; margin-top: 20px; }
+              .characters { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 40px; }
+              .character-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; transition: transform 0.3s; cursor: pointer; }
+              .character-card:hover { transform: translateY(-5px); border-color: #00d9ff; }
+              .character-name { font-size: 1.5em; margin-bottom: 8px; color: #00d9ff; }
+              .character-role { color: #8892b0; margin-bottom: 16px; }
+              .chat-section { margin-top: 40px; background: rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; display: none; }
+              .chat-section.active { display: block; }
+              .chat-messages { height: 400px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+              .message { margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; max-width: 80%; }
+              .message.user { background: #0066cc; margin-left: auto; }
+              .message.npc { background: rgba(0,255,136,0.2); border-left: 3px solid #00ff88; }
+              .chat-input { display: flex; gap: 12px; }
+              .chat-input input { flex: 1; padding: 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; font-size: 1em; }
+              .chat-input button { padding: 16px 32px; background: linear-gradient(90deg, #00d9ff, #00ff88); border: none; border-radius: 12px; color: #1a1a2e; font-weight: bold; cursor: pointer; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
 
