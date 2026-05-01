@@ -10,7 +10,7 @@ jobs:
       contents: write
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5  # ✅ Обновлено до v5
 
       - name: Create files
         run: |
