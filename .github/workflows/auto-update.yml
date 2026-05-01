@@ -239,4 +239,165 @@ jobs:
           </head>
           <body>
             <div class="container">
+              <header>
+                <h1>🤖 AI NPC Platform</h1>
+                <p>Интерактивные персонажи с искусственным интеллектом</p>
+                <div class="status" id="status">🔄 Подключение...</div>
+              </header>
+              <h2 style="margin-bottom: 20px;">Выберите персонажа:</h2>
+              <div class="characters" id="characters"></div>
+              <div class="chat-section" id="chatSection">
+                <h2 id="chatTitle" style="margin-bottom: 20px;"></h2>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input">
+                  <input type="text" id="messageInput" placeholder="Напишите сообщение..." />
+                  <button onclick="sendMessage()">Отправить</button>
+                </div>
+              </div>
+            </div>
+            <script>
+              const API_BASE = 'http://localhost:8787';
+              let currentSession = null;
+              async function checkStatus() {
+                try {
+                  const res = await fetch(`${API_BASE}/health`);
+                  const data = await res.json();
+                  document.getElementById('status').innerHTML = `✅ API Ready | LLM: ${data.llm} | Updated: ${data.updated || 'N/A'}`;
+                } catch { document.getElementById('status').innerHTML = '❌ API Offline'; }
+              }
+              async function loadCharacters() {
+                try {
+                  const res = await fetch(`${API_BASE}/v1/characters`);
+                  const chars = await res.json();
+                  document.getElementById('characters').innerHTML = chars.map(c => 
+                    `<div class="character-card" onclick="selectCharacter('${c.id}', '${c.name}')">
+                      <div class="character-name">${c.name}</div>
+                      <div class="character-role">${c.role}</div>
+                    </div>`
+                  ).join('');
+                } catch { document.getElementById('characters').innerHTML = '<p>Ошибка. Запустите backend.</p>'; }
+              }
+              function selectCharacter(id, name) {
+                document.getElementById('chatSection').classList.add('active');
+                document.getElementById('chatTitle').textContent = `💬 Диалог с ${name}`;
+                document.getElementById('chatMessages').innerHTML = '<p>Начните диалог...</p>';
+                startSession(id);
+              }
+              async function startSession(characterId) {
+                try {
+                  const res = await fetch(`${API_BASE}/v1/sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ characterId })
+                  });
+                  currentSession = await res.json();
+                } catch (e) { alert('Ошибка: ' + e.message); }
+              }
+              async function sendMessage() {
+                const input = document.getElementById('messageInput');
+                const text = input.value.trim();
+                if (!text || !currentSession) return;
+                const messagesDiv = document.getElementById('chatMessages');
+                if (messagesDiv.querySelector('p')) messagesDiv.innerHTML = '';
+                messagesDiv.innerHTML += `<div class="message user">${text}</div>`;
+                input.value = '';
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                try {
+                  const res = await fetch(`${API_BASE}/v1/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: currentSession.id, text })
+                  });
+                  const data = await res.json();
+                  messagesDiv.innerHTML += `<div class="message npc">${data.content}</div>`;
+                  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                } catch (e) { messagesDiv.innerHTML += `<div class="message npc">Ошибка: ${e.message}</div>`; }
+              }
+              document.getElementById('messageInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+              checkStatus();
+              loadCharacters();
+            </script>
+          </body>
+          </html>
+          EOF
 
+          # .gitignore
+          cat > .gitignore << 'EOF'
+          node_modules/
+          .env
+          dist/
+          *.log
+          EOF
+
+          # README.md
+          cat > README.md << 'EOF'
+          # 🤖 AI NPC Platform
+          
+          Интерактивные персонажи с искусственным интеллектом.
+          
+          ## Быстрый старт
+          
+          ```bash
+          npm install
+          cp gpt5.3-ai-npc-platform/backend/.env.example gpt5.3-ai-npc-platform/backend/.env
+          # Отредактируйте .env и добавьте OPENAI_API_KEY
+          npm run dev:all
+          ```
+          
+          ## Ссылки
+          
+          - API: http://localhost:8787/health
+          - Web: http://localhost:5173
+          
+          ## Обновление через GitHub Actions
+          
+          1. Создайте Issue с меткой "update"
+          2. Или запустите Actions вручную
+          3. Скачайте обновлённые файлы
+          EOF
+
+          echo "✅ Files generated successfully"
+
+      - name: 💾 Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git diff --staged --quiet || git commit -m "🤖 Auto-update: $(date '+%Y-%m-%d %H:%M:%S')"
+          git push
+
+      - name: 📝 Update log
+        run: |
+          echo "" >> UPDATE_LOG.md
+          echo "✅ Update completed at $(date)" >> UPDATE_LOG.md
+          echo "" >> UPDATE_LOG.md
+          echo "📥 Download latest version:" >> UPDATE_LOG.md
+          echo "   - Click 'Code' → 'Download ZIP' on GitHub" >> UPDATE_LOG.md
+          echo "   - Or run: git pull" >> UPDATE_LOG.md
+
+      - name: 💬 Comment on issue (if triggered by issue)
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ **Update completed!**\n\n📥 Download latest version:\n- Click "Code" → "Download ZIP"\n- Or run: `git pull`\n\n📝 See UPDATE_LOG.md for details.'
+            });
+
+      - name: 🎉 Summary
+        run: |
+          echo "╔════════════════════════════════════════════════════════╗"
+          echo "║           ✅ Update completed successfully!            ║"
+          echo "╚════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "📥 To download:"
+          echo "   1. Click 'Code' button on GitHub"
+          echo "   2. Select 'Download ZIP'"
+          echo "   3. Extract to E:\AI\AI_folder"
+          echo ""
+          echo "📝 Or via Git:"
+          echo "   cd E:\AI\AI_folder"
+          echo "   git pull"
