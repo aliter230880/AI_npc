@@ -313,6 +313,18 @@
   background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
 }
+/* Select dropdown fix - dark background for options */
+.input option,
+.input optgroup {
+  background: #0a0c14;
+  color: white;
+}
+.input option:hover,
+.input option:focus,
+.input option:checked {
+  background: rgba(167, 139, 250, 0.2);
+  color: white;
+}
 
 .label {
   display: block;
