@@ -113,6 +113,18 @@ export default function Builder() {
     finally { setBusy(false); }
   }
 
+  async function deleteChar() {
+    if (!editing || !id) return;
+    if (!confirm(`Delete "${form.name}"? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/characters/${id}`, { method: "DELETE" });
+      push(`Deleted "${form.name}"`, "ok");
+      navigate("/dashboard");
+    } catch (e) { onError(e); }
+    finally { setBusy(false); }
+  }
+
   if (!me || !loaded) return null;
 
   return (
@@ -303,9 +315,14 @@ export default function Builder() {
             )}
           </button>
           {editing && (
-            <button type="button" className="btn-secondary w-full" onClick={() => navigate(`/chat/${id}`)}>
-              <Eye className="size-4" /> Open chat
-            </button>
+            <>
+              <button type="button" className="btn-secondary w-full" onClick={() => navigate(`/chat/${id}`)}>
+                <Eye className="size-4" /> Open chat
+              </button>
+              <button type="button" className="btn-ghost w-full text-red-400 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40" onClick={deleteChar} disabled={busy}>
+                🗑️ Delete character
+              </button>
+            </>
           )}
         </div>
       </form>
