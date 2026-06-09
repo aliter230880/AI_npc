@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Character Platform — Playground</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --bg2: #161922;
+    --bg3: #1f2330;
+    --fg: #e8eaf0;
+    --muted: #8a91a3;
+    --accent: #7c5cff;
+    --accent2: #5dd1ff;
+    --user: #2a3a5c;
+    --bot: #2b1f4a;
+    --danger: #ff5c8a;
+    --ok: #4ed18a;
+  }
+  * { box-sizing: border-box }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif }
+  body { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh }
+
+  /* --- sidebar --- */
+  aside { background: var(--bg2); border-right: 1px solid #232734; padding: 16px; display: flex; flex-direction: column; gap: 12px }
+  aside h1 { font-size: 16px; margin: 0 0 4px; letter-spacing: 0.3px }
+  aside .sub { color: var(--muted); font-size: 12px }
+  .auth { background: var(--bg3); border-radius: 10px; padding: 10px }
+  .auth input { width: 100%; background: #11141c; color: var(--fg); border: 1px solid #2a2f3e; border-radius: 7px; padding: 7px 9px; font-size: 13px; margin-bottom: 6px }
+  .auth label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 6px }
+  .row { display: flex; gap: 6px }
+  button { background: var(--accent); color: white; border: 0; padding: 7px 11px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 500 }
+  button.ghost { background: transparent; border: 1px solid #2a2f3e; color: var(--fg) }
+  button.danger { background: transparent; border: 1px solid #553040; color: var(--danger) }
+  button:disabled { opacity: 0.5; cursor: not-allowed }
+  .who { font-size: 12px; color: var(--muted); padding: 6px 0 }
+  .who b { color: var(--fg) }
+
+  .characters { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-top: 6px }
+  .char { background: var(--bg3); border: 1px solid transparent; border-radius: 9px; padding: 9px 11px; cursor: pointer; transition: border-color .12s }
+  .char:hover { border-color: #353a4d }
+  .char.active { border-color: var(--accent) }
+  .char .name { font-weight: 600; font-size: 14px }
+  .char .desc { color: var(--muted); font-size: 12px; margin-top: 2px; line-height: 1.35; max-height: 32px; overflow: hidden }
+  .char .meta { font-size: 11px; color: var(--muted); margin-top: 4px }
+  .char .meta .pill { background: #2a2f3e; border-radius: 4px; padding: 1px 6px; margin-right: 4px }
+  .char .meta .pill.mine { background: #2b3a25; color: #b1d99c }
+
+  /* --- chat area --- */
+  main { display: flex; flex-direction: column; min-width: 0 }
+  header.top { padding: 14px 20px; border-bottom: 1px solid #232734; display: flex; align-items: center; gap: 12px; min-height: 60px }
+  header.top .title { font-weight: 600 }
+  header.top .greeting { color: var(--muted); font-size: 13px }
+  header.top .right { margin-left: auto; display: flex; gap: 6px; align-items: center }
+  .pill-info { background: var(--bg3); padding: 4px 9px; border-radius: 6px; font-size: 11px; color: var(--muted) }
+  .pill-info b { color: var(--fg) }
+
+  .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px }
+  .msg { max-width: 720px; padding: 10px 14px; border-radius: 14px; line-height: 1.45; font-size: 14px; white-space: pre-wrap; word-wrap: break-word }
+  .msg.user { align-self: flex-end; background: var(--user) }
+  .msg.assistant { align-self: flex-start; background: var(--bot) }
+  .msg.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; font-style: italic }
+  .msg .role { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px }
+
+  footer.compose { border-top: 1px solid #232734; padding: 12px 20px; display: flex; gap: 8px }
+  footer.compose textarea { flex: 1; background: var(--bg3); border: 1px solid #2a2f3e; color: var(--fg); border-radius: 9px; padding: 10px 12px; font-size: 14px; font-family: inherit; resize: none; min-height: 44px; max-height: 160px }
+  footer.compose textarea:focus { outline: none; border-color: var(--accent) }
+
+  .empty { color: var(--muted); align-self: center; margin: auto; max-width: 420px; text-align: center; padding: 40px }
+  .empty h2 { font-size: 18px; margin: 0 0 6px; color: var(--fg) }
+  .empty p { font-size: 13px; line-height: 1.5; margin: 0 }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--bg3); border-left: 3px solid var(--danger); padding: 10px 14px; font-size: 13px; border-radius: 6px; max-width: 360px; z-index: 9 }
+  .toast.ok { border-left-color: var(--ok) }
+
+  /* --- modal --- */
+  .modal-bg { position: fixed; inset: 0; background: rgba(8,9,13,0.7); display: none; align-items: center; justify-content: center; z-index: 10; padding: 20px; overflow-y: auto }
+  .modal-bg.open { display: flex }
+  .modal { background: var(--bg2); border: 1px solid #2a2f3e; border-radius: 12px; padding: 22px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto }
+  .modal h2 { margin: 0 0 4px; font-size: 18px }
+  .modal .hint { color: var(--muted); font-size: 12px; margin-bottom: 16px }
+  .modal label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px }
+  .modal input[type="text"], .modal textarea, .modal select {
+    width: 100%; background: #11141c; color: var(--fg); border: 1px solid #2a2f3e; border-radius: 7px; padding: 8px 10px; font-size: 13px; font-family: inherit;
+  }
+  .modal textarea { resize: vertical; min-height: 60px }
+  .modal .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+  .modal .actions { display: flex; gap: 8px; margin-top: 18px; justify-content: flex-end }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg); margin: 10px 0 4px }
+  .check input { margin: 0 }
+
+  /* --- voice ui --- */
+  .voice-btn { background: var(--bg3); border: 1px solid #2a2f3e; color: var(--fg); width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px }
+  .voice-btn.rec { background: #5a1f2e; border-color: var(--danger); animation: pulse 1.2s infinite }
+  .voice-btn:disabled { opacity: 0.4; cursor: not-allowed }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,138,0.5) } 50% { box-shadow: 0 0 0 8px rgba(255,92,138,0) } }
+  .voice-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); padding: 4px 9px; background: var(--bg3); border-radius: 6px; cursor: pointer }
+  .voice-toggle input { margin: 0 }
+</style>
+</head>
+<body>
+
+<aside>
+  <div>
+    <h1>AI Character Platform</h1>
+    <div class="sub" id="info-sub">checking server…</div>
+  </div>
+
+  <div class="auth" id="auth-block">
+    <div id="auth-loggedout">
+      <input id="email" placeholder="email" autocomplete="email" />
+      <input id="password" type="password" placeholder="password (min 8)" autocomplete="current-password" />
+      <label><input type="checkbox" id="adult" /> I'm 18+</label>
+      <div class="row">
+        <button id="btn-login" style="flex:1">Log in</button>
+        <button id="btn-register" class="ghost" style="flex:1">Register</button>
+      </div>
+    </div>
+    <div id="auth-loggedin" style="display:none">
+      <div class="who">Signed in as <b id="me-email">—</b></div>
+      <button id="btn-logout" class="danger" style="width:100%">Log out</button>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-top: 4px">
+    <div style="font-size:11px; letter-spacing:0.5px; color:var(--muted); text-transform:uppercase">Characters</div>
+    <div style="display:flex; gap:4px">
+      <button id="btn-new" class="ghost" style="padding: 3px 7px; font-size: 11px" title="New character">+ New</button>
+      <button id="btn-reload" class="ghost" style="padding: 3px 7px; font-size: 11px" title="Reload">↻</button>
+    </div>
+  </div>
+  <div class="characters" id="char-list"></div>
+</aside>
+
+<main>
+  <header class="top">
+    <div>
+      <div class="title" id="active-name">Pick a character</div>
+      <div class="greeting" id="active-desc">on the left to start chatting</div>
+    </div>
+    <div class="right">
+      <label class="voice-toggle" title="Speak assistant replies"><input type="checkbox" id="tts-toggle" /> 🔊 voice reply</label>
+      <span class="pill-info">LLM: <b id="info-llm">…</b></span>
+      <span class="pill-info">model: <b id="info-model">…</b></span>
+    </div>
+  </header>
+
+  <div class="messages" id="messages">
+    <div class="empty">
+      <h2>Welcome 👋</h2>
+      <p>Pick one of the public characters on the left. Logging in lets you create your own and keep chat history. Without login you can still chat with public characters as a guest.</p>
+    </div>
+  </div>
+
+  <footer class="compose">
+    <button id="btn-mic" class="voice-btn" title="Hold to talk (or click to toggle)" disabled>🎙️</button>
+    <textarea id="input" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" rows="1" disabled></textarea>
+    <button id="btn-send" disabled>Send</button>
+  </footer>
+</main>
+
+<!-- New character modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2>Create your character</h2>
+    <div class="hint">All fields except name are optional. The system prompt is what shapes the character's voice and behavior.</div>
+
+    <label>Name *</label>
+    <input type="text" id="f-name" maxlength="120" placeholder="e.g. Marcus the Pirate Captain" />
+
+    <label>Description</label>
+    <input type="text" id="f-desc" maxlength="500" placeholder="One-line summary shown in the list" />
+
+    <label>Greeting (first thing they say)</label>
+    <textarea id="f-greeting" maxlength="2000" placeholder="Hello, traveler. Pull up a chair."></textarea>
+
+    <label>System prompt (personality + style)</label>
+    <textarea id="f-system" maxlength="4000" rows="4" placeholder="You are a salty 18th-century pirate captain. You speak in nautical slang. Loyal to your crew, deeply suspicious of authority..."></textarea>
+
+    <label>Backstory (optional context, kept in every prompt)</label>
+    <textarea id="f-backstory" maxlength="4000" rows="3" placeholder="Born in Tortuga. Lost a leg to a shark off Madagascar. Now hunts the East India Company..."></textarea>
+
+    <div class="row2">
+      <div>
+        <label>Personality traits (comma-separated)</label>
+        <input type="text" id="f-traits" maxlength="300" placeholder="bold, sarcastic, loyal" />
+      </div>
+      <div>
+        <label>Tags (comma-separated)</label>
+        <input type="text" id="f-tags" maxlength="300" placeholder="pirate,adventure,roleplay" />
+      </div>
+    </div>
+
+    <div class="row2">
+      <div>
+        <label>Language</label>
+        <select id="f-lang">
+          <option value="en">English</option>
+          <option value="ru">Русский</option>
+          <option value="es">Español</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
+      <div>
+        <label>Temperature: <span id="f-temp-val">0.8</span></label>
+        <input type="range" id="f-temp" min="0" max="2" step="0.1" value="0.8" style="width:100%" />
+      </div>
+    </div>
+
+    <label class="check"><input type="checkbox" id="f-public" /> Public (visible to anyone, even logged-out)</label>
+    <label class="check"><input type="checkbox" id="f-nsfw" /> NSFW content</label>
+
+    <div class="actions">
+      <button class="ghost" id="btn-cancel">Cancel</button>
+      <button id="btn-create">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+const API = ""; // same origin; backend mounts /static and serves API on / itself
+let token = localStorage.getItem("cp_token") || null;
+let me = null;
+let activeCharacter = null;
+let activeSession = null;
+
+function toast(msg, ok = false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast" + (ok ? " ok" : "");
+  t.style.display = "block";
+  clearTimeout(toast._h);
+  toast._h = setTimeout(() => t.style.display = "none", 4000);
+}
+
+function authHeaders() {
+  return token ? { Authorization: "Bearer " + token } : {};
+}
+
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", ...authHeaders(), ...(opts.headers || {}) };
+  const r = await fetch(API + path, { ...opts, headers });
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { const j = await r.json(); if (j.detail) detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(`${r.status} ${detail}`);
+  }
+  return r.status === 204 ? null : r.json();
+}
+
+async function loadInfo() {
+  try {
+    const info = await api("/info");
+    document.getElementById("info-sub").textContent = `${info.app} · env=${info.env}`;
+    document.getElementById("info-llm").textContent = info.llm_provider;
+    document.getElementById("info-model").textContent = info.default_model;
+  } catch (e) {
+    document.getElementById("info-sub").textContent = "server unreachable";
+    toast(e.message);
+  }
+}
+
+async function refreshMe() {
+  if (!token) { me = null; renderAuth(); return; }
+  try { me = await api("/auth/me"); } catch { token = null; localStorage.removeItem("cp_token"); me = null; }
+  renderAuth();
+}
+
+function renderAuth() {
+  const out = document.getElementById("auth-loggedout");
+  const inn = document.getElementById("auth-loggedin");
+  if (me) {
+    out.style.display = "none"; inn.style.display = "block";
+    document.getElementById("me-email").textContent = me.email;
+  } else {
+    out.style.display = "block"; inn.style.display = "none";
+  }
+}
+
+async function loadCharacters() {
+  try {
+    const chars = await api("/characters");
+    const wrap = document.getElementById("char-list");
+    wrap.innerHTML = "";
+    if (chars.length === 0) {
+      wrap.innerHTML = '<div style="color:var(--muted); font-size:12px; padding:8px">No characters yet</div>';
+      return;
+    }
+    for (const c of chars) {
+      const el = document.createElement("div");
+      el.className = "char" + (activeCharacter && activeCharacter.id === c.id ? " active" : "");
+      el.innerHTML = `
+        <div class="name">${escapeHtml(c.name)}</div>
+        <div class="desc">${escapeHtml(c.description || "")}</div>
+        <div class="meta">
+          ${c.is_public ? '<span class="pill">public</span>' : '<span class="pill mine">mine</span>'}
+          ${c.nsfw ? '<span class="pill">NSFW</span>' : ''}
+          <span class="pill">${escapeHtml(c.language)}</span>
+        </div>`;
+      el.onclick = () => selectCharacter(c);
+      wrap.appendChild(el);
+    }
+  } catch (e) { toast(e.message); }
+}
+
+async function selectCharacter(c) {
+  activeCharacter = c;
+  activeSession = null;
+  document.querySelectorAll(".char").forEach(el => el.classList.remove("active"));
+  event?.currentTarget?.classList?.add("active");
+  document.getElementById("active-name").textContent = c.name;
+  document.getElementById("active-desc").textContent = c.description || "—";
+
+  try {
+    const session = await api("/chat/sessions", { method: "POST", body: JSON.stringify({ character_id: c.id }) });
+    activeSession = session;
+    const msgs = await api(`/chat/sessions/${session.id}/messages`);
+    renderMessages(msgs);
+    document.getElementById("input").disabled = false;
+    document.getElementById("btn-send").disabled = false;
+    document.getElementById("input").focus();
+  } catch (e) { toast(e.message); }
+}
+
+function renderMessages(msgs) {
+  const box = document.getElementById("messages");
+  box.innerHTML = "";
+  for (const m of msgs) appendMessage(m.role, m.content, false);
+  scrollDown();
+}
+
+function appendMessage(role, content, scroll = true) {
+  const box = document.getElementById("messages");
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.innerHTML = `<div class="role">${role}</div><div class="body"></div>`;
+  div.querySelector(".body").textContent = content;
+  box.appendChild(div);
+  if (scroll) scrollDown();
+  return div.querySelector(".body");
+}
+
+function scrollDown() {
+  const box = document.getElementById("messages");
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage(text) {
+  if (!activeSession || !text.trim()) return;
+  appendMessage("user", text);
+
+  const stream = true;
+  if (!stream) {
+    try {
+      const r = await api(`/chat/sessions/${activeSession.id}/messages`, { method: "POST", body: JSON.stringify({ content: text }) });
+      appendMessage("assistant", r.assistant_message.content);
+      speak(r.assistant_message.content, activeCharacter?.language || "en");
+    } catch (e) { toast(e.message); }
+    return;
+  }
+
+  // SSE стрим через fetch (EventSource не умеет POST)
+  const target = appendMessage("assistant", "");
+  let collected = "";
+  try {
+    const resp = await fetch(API + `/chat/sessions/${activeSession.id}/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ content: text }),
+    });
+    if (!resp.ok || !resp.body) {
+      const t = await resp.text();
+      target.textContent = "[error] " + t.slice(0, 200);
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split("\n\n");
+      buf = parts.pop();
+      for (const p of parts) {
+        const line = p.trim();
+        if (!line.startsWith("data:")) continue;
+        let data = line.slice(5);
+        if (data.startsWith(" ")) data = data.slice(1);
+        if (data === "[DONE]") {
+          if (collected) speak(collected, activeCharacter?.language || "en");
+          return;
+        }
+        const piece = data.replaceAll("\\n", "\n");
+        target.textContent += piece;
+        collected += piece;
+        scrollDown();
+      }
+    }
+    if (collected) speak(collected, activeCharacter?.language || "en");
+  } catch (e) { target.textContent = "[error] " + e.message; }
+}
+
+function escapeHtml(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+// --- handlers ---
+document.getElementById("btn-login").onclick = async () => {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  try {
+    const r = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+    token = r.access_token; localStorage.setItem("cp_token", token);
+    await refreshMe(); await loadCharacters(); toast("logged in", true);
+  } catch (e) { toast(e.message); }
+};
+document.getElementById("btn-register").onclick = async () => {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+  const adult = document.getElementById("adult").checked;
+  if (!adult) { toast("Confirm 18+ first"); return; }
+  try {
+    const r = await api("/auth/register", { method: "POST", body: JSON.stringify({ email, password, is_adult: true }) });
+    token = r.access_token; localStorage.setItem("cp_token", token);
+    await refreshMe(); await loadCharacters(); toast("registered", true);
+  } catch (e) { toast(e.message); }
+};
+document.getElementById("btn-logout").onclick = async () => {
+  token = null; me = null; localStorage.removeItem("cp_token"); renderAuth(); await loadCharacters(); toast("logged out", true);
+};
+document.getElementById("btn-reload").onclick = loadCharacters;
+document.getElementById("btn-send").onclick = () => {
+  const inp = document.getElementById("input");
+  const t = inp.value;
+  inp.value = "";
+  sendMessage(t);
+};
+document.getElementById("input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById("btn-send").click();
+  }
+});
+
+// --- New character modal ---
+const modal = document.getElementById("modal-bg");
+function openModal() {
+  if (!me) { toast("Log in first to create characters"); return; }
+  modal.classList.add("open");
+  document.getElementById("f-name").focus();
+}
+function closeModal() { modal.classList.remove("open"); }
+document.getElementById("btn-new").onclick = openModal;
+document.getElementById("btn-cancel").onclick = closeModal;
+modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+document.getElementById("f-temp").addEventListener("input", e => {
+  document.getElementById("f-temp-val").textContent = e.target.value;
+});
+document.getElementById("btn-create").onclick = async () => {
+  const name = document.getElementById("f-name").value.trim();
+  if (!name) { toast("Name is required"); return; }
+  const body = {
+    name,
+    description: document.getElementById("f-desc").value.trim(),
+    greeting: document.getElementById("f-greeting").value.trim(),
+    system_prompt: document.getElementById("f-system").value.trim(),
+    backstory: document.getElementById("f-backstory").value.trim(),
+    personality_traits: document.getElementById("f-traits").value.trim(),
+    tags: document.getElementById("f-tags").value.trim(),
+    language: document.getElementById("f-lang").value,
+    temperature: parseFloat(document.getElementById("f-temp").value) || 0.8,
+    is_public: document.getElementById("f-public").checked,
+    nsfw: document.getElementById("f-nsfw").checked,
+    model: "", // дефолт из настроек сервера
+  };
+  try {
+    const created = await api("/characters", { method: "POST", body: JSON.stringify(body) });
+    closeModal();
+    // очищаем поля чтобы в следующий раз была чистая форма
+    ["f-name","f-desc","f-greeting","f-system","f-backstory","f-traits","f-tags"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("f-public").checked = false;
+    document.getElementById("f-nsfw").checked = false;
+    await loadCharacters();
+    selectCharacter(created);
+    toast(`created "${created.name}"`, true);
+  } catch (e) { toast(e.message); }
+};
+
+// --- Voice (browser-native, MVP) ---
+// TTS: Web Speech Synthesis API. Пишет ответ голосом из браузера.
+// STT: Web Speech Recognition (SpeechRecognition / webkitSpeechRecognition).
+//      Работает только в Chromium-браузерах (Chrome, Edge, Opera). В Firefox/Safari отключён.
+const ttsToggle = document.getElementById("tts-toggle");
+let ttsEnabled = localStorage.getItem("cp_tts") === "1";
+ttsToggle.checked = ttsEnabled;
+ttsToggle.addEventListener("change", () => {
+  ttsEnabled = ttsToggle.checked;
+  localStorage.setItem("cp_tts", ttsEnabled ? "1" : "0");
+  if (!ttsEnabled) window.speechSynthesis.cancel();
+});
+
+function pickVoice(lang) {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const exact = voices.find(v => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+  return exact || voices[0];
+}
+function speak(text, lang = "en") {
+  if (!ttsEnabled || !text) return;
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice(lang === "zh" ? "zh-CN" : lang);
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = 1.0;
+  u.pitch = 1.0;
+  window.speechSynthesis.speak(u);
+}
+// чтобы голоса прогрузились
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => {};
+}
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById("btn-mic");
+let recognition = null;
+let isRecording = false;
+
+if (!SR) {
+  micBtn.title = "Voice input not supported in this browser (use Chrome/Edge)";
+} else {
+  micBtn.disabled = true; // активируется при выборе персонажа
+  micBtn.addEventListener("click", () => {
+    if (!activeSession) return;
+    if (isRecording) { recognition?.stop(); return; }
+    recognition = new SR();
+    const lang = (activeCharacter?.language || "en").toLowerCase();
+    recognition.lang = lang === "ru" ? "ru-RU" : lang === "es" ? "es-ES" : lang === "zh" ? "zh-CN" : "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    let finalText = "";
+    const inp = document.getElementById("input");
+    const beforeText = inp.value;
+
+    recognition.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      inp.value = (beforeText ? beforeText + " " : "") + finalText + interim;
+    };
+    recognition.onerror = (e) => {
+      toast("voice error: " + e.error);
+    };
+    recognition.onend = () => {
+      isRecording = false;
+      micBtn.classList.remove("rec");
+      // если что-то распознали — авто-отправка
+      if (finalText.trim()) {
+        const text = inp.value;
+        inp.value = "";
+        sendMessage(text);
+      }
+    };
+    isRecording = true;
+    micBtn.classList.add("rec");
+    recognition.start();
+  });
+}
+
+// заворачиваем selectCharacter чтобы включать кнопку микрофона
+const _origSelect = selectCharacter;
+selectCharacter = async function(c) {
+  await _origSelect(c);
+  if (SR && activeSession) micBtn.disabled = false;
+};
+
+(async () => { await loadInfo(); await refreshMe(); await loadCharacters(); })();
+</script>
+</body>
+</html>

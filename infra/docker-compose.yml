@@ -1,0 +1,21 @@
+# Production docker-compose для VPS.
+# На внешний интерфейс ничего не торчит — Caddy на хосте проксирует.
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: character-platform:latest
+    container_name: character-platform
+    restart: unless-stopped
+    # Слушаем только loopback хоста — наружу не светим.
+    ports:
+      - "127.0.0.1:8001:8000"
+    env_file:
+      - ./.env
+    volumes:
+      - cp_data:/data
+
+volumes:
+  cp_data:

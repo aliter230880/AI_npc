@@ -1,0 +1,5 @@
+vps_pass.txt
+ssh_key
+ssh_key.pub
+known_hosts
+*.log

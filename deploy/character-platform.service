@@ -1,0 +1,36 @@
+[Unit]
+Description=Aliterra Character Platform - FastAPI backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/character-platform/backend
+Environment=HOME=/opt/character-platform/data
+Environment=HF_HOME=/opt/character-platform/data/hf-cache
+Environment=HF_HUB_CACHE=/opt/character-platform/data/hf-cache/hub
+Environment=SENTENCE_TRANSFORMERS_HOME=/opt/character-platform/data/hf-cache
+Environment=TORCH_HOME=/opt/character-platform/data/torch-cache
+Environment=XDG_CACHE_HOME=/opt/character-platform/data/cache
+EnvironmentFile=/opt/character-platform/backend/.env
+ExecStart=/opt/character-platform/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1 --log-level info
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+# Resource limits — после апгрейда VPS до 2 ГБ RAM (+2 ГБ swap)
+MemoryHigh=1400M
+MemoryMax=1700M
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/character-platform/data /opt/character-platform/backend
+
+[Install]
+WantedBy=multi-user.target
