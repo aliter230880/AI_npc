@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Google Gemini (direct API, free tier)
     gemini_api_key: str = ""
     gemini_default_model: str = "gemini-3.5-flash"
+    
+    # Yandex SpeechKit TTS (best for Russian)
+    yandex_api_key: str = ""
 
     # Memory (Qdrant + sentence-transformers)
     qdrant_url: str = "http://127.0.0.1:6333"

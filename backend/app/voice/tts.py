@@ -243,34 +243,52 @@ async def synthesize_wav(
     emotion: str | None = None,
     provider: str | None = None,
 ) -> bytes:
-    """Универсальный синтез с fallback цепочкой: ElevenLabs → Google → Edge → Piper.
+    """Универсальный синтез с fallback цепочкой: Yandex (RU) → ElevenLabs → Google → Edge → Piper.
     
     Args:
         text: текст для синтеза
-        voice_id: ID голоса (elevenlabs_*, google_*, edge_*, или piper *)
+        voice_id: ID голоса (yandex_*, elevenlabs_*, google_*, edge_*, или piper *)
         language: язык (en, ru) — для автовыбора голоса
         emotion: эмоция (happy, sad, angry, neutral) — для всех провайдеров
-        provider: явное указание провайдера ("elevenlabs", "google", "edge" или "piper")
+        provider: явное указание провайдера ("yandex", "elevenlabs", "google", "edge" или "piper")
     
     Returns:
         Audio bytes (MP3 или WAV в зависимости от провайдера)
     """
     # Определяем провайдер по voice_id или явному указанию
-    if provider == "piper" or (voice_id and not voice_id.startswith("elevenlabs_") and not voice_id.startswith("google_") and not voice_id.startswith("edge_")):
-        # Явно Piper или voice_id не из ElevenLabs/Google/Edge
+    if provider == "piper" or (voice_id and not voice_id.startswith(("yandex_", "elevenlabs_", "google_", "edge_"))):
+        # Явно Piper или voice_id не из других провайдеров
         voice = resolve_voice(voice_id, language)
         if not voice:
             raise ValueError("No Piper voice available")
         return await synthesize_wav_piper(text, voice)
     
-    # 🌟 1️⃣ Пробуем ElevenLabs (premium, best quality, emotions)
+    # 🇷🇺 1️⃣ Пробуем Yandex SpeechKit (best quality for Russian)
+    from app.core.config import get_settings
+    from app.voice.yandex_provider import (
+        HTTPX_AVAILABLE as YANDEX_AVAILABLE,
+        resolve_yandex_voice,
+        synthesize_yandex_wav,
+    )
+    
+    s = get_settings()
+    if YANDEX_AVAILABLE and s.yandex_api_key and (language == "ru" or (voice_id and voice_id.startswith("yandex_"))):
+        yandex_voice = resolve_yandex_voice(voice_id)
+        if yandex_voice:
+            try:
+                log.info("Trying Yandex TTS: voice=%s emotion=%s", yandex_voice.id, emotion)
+                return await synthesize_yandex_wav(text, yandex_voice, emotion, s.yandex_api_key, CACHE_DIR)
+            except Exception as e:
+                log.warning("Yandex TTS failed (%s), falling back to ElevenLabs", e)
+    
+    # 🌟 2️⃣ Пробуем ElevenLabs (premium, best quality, emotions)
     from app.voice.elevenlabs_provider import (
         HTTPX_AVAILABLE as ELEVENLABS_AVAILABLE,
         resolve_elevenlabs_voice,
         synthesize_elevenlabs_mp3,
     )
     
-    if ELEVENLABS_AVAILABLE and provider != "google" and provider != "edge":
+    if ELEVENLABS_AVAILABLE and provider != "google" and provider != "edge" and provider != "yandex":
         elevenlabs_voice = resolve_elevenlabs_voice(voice_id, language)
         if elevenlabs_voice:
             try:
@@ -279,14 +297,14 @@ async def synthesize_wav(
             except Exception as e:
                 log.warning("ElevenLabs TTS failed (%s), falling back to Google TTS", e)
     
-    # 2️⃣ Fallback на Google Cloud TTS (premium, best free tier)
+    # 3️⃣ Fallback на Google Cloud TTS (premium, best free tier)
     from app.voice.google_provider import (
         GOOGLE_TTS_AVAILABLE,
         resolve_google_voice,
         synthesize_google_wav,
     )
     
-    if GOOGLE_TTS_AVAILABLE and provider != "edge" and provider != "elevenlabs":
+    if GOOGLE_TTS_AVAILABLE and provider != "edge" and provider != "elevenlabs" and provider != "yandex":
         google_voice = resolve_google_voice(voice_id, language)
         if google_voice:
             try:
@@ -295,14 +313,14 @@ async def synthesize_wav(
             except Exception as e:
                 log.warning("Google TTS failed (%s), falling back to Edge TTS", e)
     
-    # 3️⃣ Fallback на Edge TTS (free, good quality, может быть заблокирован)
+    # 4️⃣ Fallback на Edge TTS (free, good quality, может быть заблокирован)
     from app.voice.edge_provider import (
         EDGE_AVAILABLE,
         resolve_edge_voice,
         synthesize_edge_wav,
     )
     
-    if EDGE_AVAILABLE and provider != "google" and provider != "elevenlabs":
+    if EDGE_AVAILABLE and provider != "google" and provider != "elevenlabs" and provider != "yandex":
         edge_voice = resolve_edge_voice(voice_id, language)
         if edge_voice:
             try:
@@ -311,7 +329,7 @@ async def synthesize_wav(
             except Exception as e:
                 log.warning("Edge TTS failed (%s), falling back to Piper", e)
     
-    # 4️⃣ Last resort: Piper (local, basic quality, always works)
+    # 5️⃣ Last resort: Piper (local, basic quality, always works)
     log.info("Using Piper fallback")
     voice = resolve_voice(voice_id, language)
     if not voice:

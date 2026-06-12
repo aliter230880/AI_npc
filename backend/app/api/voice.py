@@ -52,8 +52,21 @@ def _switch_voice_to_lang(voice_id: str, target_lang: str) -> str | None:
 
 @router.get("/voices", response_model=list[VoiceRead])
 def voices() -> list[VoiceRead]:
-    """Возвращает все доступные голоса: ElevenLabs → Google TTS → Edge TTS → Piper."""
+    """Возвращает все доступные голоса: Yandex (RU) → ElevenLabs → Google TTS → Edge TTS."""
     result = []
+    
+    # 🇷🇺 Yandex SpeechKit голоса (premium для русского)
+    from app.voice.yandex_provider import list_yandex_voices
+    for v in list_yandex_voices():
+        result.append(
+            VoiceRead(
+                id=v.id,
+                name=f"🇷🇺 {v.name} (Yandex Premium)",
+                language=v.language,
+                gender=v.gender,
+                style=v.style,
+            )
+        )
     
     # 🌟 ElevenLabs голоса (premium, лучшее качество, эмоции)
     from app.voice.elevenlabs_provider import list_elevenlabs_voices
