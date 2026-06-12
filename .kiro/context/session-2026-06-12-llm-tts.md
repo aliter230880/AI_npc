@@ -46,27 +46,35 @@
 
 ---
 
-### 3. 🔄 Yandex SpeechKit (в процессе)
+### 3. ✅ Yandex SpeechKit добавлен
 
-**План:** Добавить как приоритет #1 для русского языка
+**Добавлено: 6 русских голосов**
+- 🇷🇺 Алёна — нейтральная / добрая (female)
+- 🇷🇺 Джейн — нейтральная (female)
+- 🇷🇺 Филипп — нейтральный (male)
+- 🇷🇺 Ермил — нейтральный / добрый (male)
 
-**Требования:**
-1. Регистрация Yandex Cloud: https://console.cloud.yandex.com/cloud
-2. Создание API key через AI Studio
-3. Trial grant для тестов
+**Интеграция:**
+- Приоритет #1 для русского языка
+- Fallback chain: Yandex (RU) → ElevenLabs → Google → Edge → Piper
+- Поддержка эмоций через роли (neutral/good/evil)
+- API key: `AQVNyg***` (trial grant активен)
 
-**Преимущества:**
-- Лучшие интонации и ударения для русского
-- Естественная речь без акцента
-- Поддержка эмоций через SSML
+**Файлы:**
+- `backend/app/voice/yandex_provider.py` — NEW, полная реализация
+- `backend/app/voice/tts.py` — обновлён fallback chain
+- `backend/app/api/voice.py` — добавлены Yandex голоса в список
+- `backend/app/core/config.py` — yandex_api_key параметр
+- `backend/.env` — YANDEX_API_KEY добавлен
 
-**Статус:** Ожидаем API key от пользователя
+**Статус:** ✅ Работает на проде
 
 ---
 
 ## COMMITS:
 
 ```
+c9e948d - Add Yandex SpeechKit TTS: premium Russian voices with emotions
 40b15df - Remove mechanical voices from UI: hide Piper and Google Standard voices
 1b74dbe - Fix Gemini model: switch to gemini-3.5-flash (2.0 shut down June 2026)
 9ed78e9 - Add Google Gemini API direct provider (free tier)
@@ -93,10 +101,17 @@ YANDEX_API_KEY=AQVNyg***
 ```
 
 ### Fallback Chain:
-1. ElevenLabs (10k chars/month) — если ключ и лимит есть
-2. Google TTS (1M chars/month) — если ключ есть
-3. Edge TTS (unlimited) — всегда
-4. Piper (unlimited local) — последний fallback (скрыт из UI)
+1. **Yandex SpeechKit** (RU only, trial grant) — для русского языка
+2. **ElevenLabs** (10k chars/month) — если ключ и лимит есть
+3. **Google TTS** (1M chars/month) — если ключ есть
+4. **Edge TTS** (unlimited) — всегда
+5. **Piper** (unlimited local) — последний fallback (скрыт из UI)
+
+**Итого в UI: 30 качественных голосов**
+- 🇷🇺 Yandex: 6 (premium RU)
+- ⭐ ElevenLabs: 7 (premium EN+RU)
+- 🎙️ Google Neural2/WaveNet: 9 (premium EN+RU)
+- 🔊 Edge TTS Neural: 8 (good EN+RU)
 
 ---
 
@@ -136,10 +151,12 @@ YANDEX_API_KEY=AQVNyg***
 
 ## СЛЕДУЮЩИЕ ШАГИ:
 
-1. ⏳ Получить Yandex Cloud API key
-2. ⏳ Добавить Yandex SpeechKit провайдер
-3. ⏳ Интегрировать в fallback chain (приоритет для RU)
-4. ⏳ Тестирование на проде
+1. ✅ Получить Yandex Cloud API key — DONE
+2. ✅ Добавить Yandex SpeechKit провайдер — DONE
+3. ✅ Интегрировать в fallback chain (приоритет для RU) — DONE
+4. ✅ Тестирование на проде — DONE
+5. ⏳ Мониторинг trial grant Yandex
+6. ⏳ Тестирование качества русских голосов пользователем
 
 ---
 
