@@ -232,8 +232,19 @@ async def synthesize_yandex_wav(
                 log.error("Yandex TTS error %s: %s", resp.status_code, error_text)
                 raise RuntimeError(f"Yandex TTS API error {resp.status_code}: {error_text}")
             
-            # Yandex возвращает WAV напрямую
-            audio_data = resp.content
+            # Yandex API v3 возвращает JSON с base64-encoded audio
+            try:
+                import base64
+                response_json = resp.json()
+                # Извлекаем base64 audio из результата
+                audio_content = response_json.get("result", {}).get("audioChunk", {}).get("data")
+                if not audio_content:
+                    raise RuntimeError("Yandex TTS response missing audioChunk.data")
+                # Декодируем base64 в бинарный WAV
+                audio_data = base64.b64decode(audio_content)
+            except (json.JSONDecodeError, KeyError) as e:
+                log.error("Failed to parse Yandex TTS response: %s", e)
+                raise RuntimeError(f"Invalid Yandex TTS response format: {e}") from e
             
             if not audio_data:
                 raise RuntimeError("Yandex TTS returned empty audio")
