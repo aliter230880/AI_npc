@@ -52,10 +52,23 @@ def _switch_voice_to_lang(voice_id: str, target_lang: str) -> str | None:
 
 @router.get("/voices", response_model=list[VoiceRead])
 def voices() -> list[VoiceRead]:
-    """Возвращает все доступные голоса: Google TTS → Edge TTS → Piper."""
+    """Возвращает все доступные голоса: ElevenLabs → Google TTS → Edge TTS → Piper."""
     result = []
     
-    # Google Cloud TTS голоса (primary, премиум качество)
+    # 🌟 ElevenLabs голоса (premium, лучшее качество, эмоции)
+    from app.voice.elevenlabs_provider import list_elevenlabs_voices
+    for v in list_elevenlabs_voices():
+        result.append(
+            VoiceRead(
+                id=v.id,
+                name=f"⭐ {v.name} (ElevenLabs Premium)",
+                language=v.language,
+                gender=v.gender,
+                style=v.style,
+            )
+        )
+    
+    # Google Cloud TTS голоса (premium качество, бесплатно 1М/мес)
     from app.voice.google_provider import list_google_voices
     for v in list_google_voices():
         result.append(
@@ -68,7 +81,7 @@ def voices() -> list[VoiceRead]:
             )
         )
     
-    # Edge TTS голоса (secondary, хорошее качество, может быть заблокирован)
+    # Edge TTS голоса (хорошее качество, может быть заблокирован)
     from app.voice.edge_provider import list_edge_voices
     for v in list_edge_voices():
         result.append(

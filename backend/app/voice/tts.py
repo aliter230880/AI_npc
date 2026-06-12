@@ -243,34 +243,50 @@ async def synthesize_wav(
     emotion: str | None = None,
     provider: str | None = None,
 ) -> bytes:
-    """Универсальный синтез с fallback цепочкой: Google → Edge → Piper.
+    """Универсальный синтез с fallback цепочкой: ElevenLabs → Google → Edge → Piper.
     
     Args:
         text: текст для синтеза
-        voice_id: ID голоса (google_*, edge_*, или piper *)
+        voice_id: ID голоса (elevenlabs_*, google_*, edge_*, или piper *)
         language: язык (en, ru) — для автовыбора голоса
-        emotion: эмоция (happy, sad, angry, neutral) — для Google и Edge TTS
-        provider: явное указание провайдера ("google", "edge" или "piper")
+        emotion: эмоция (happy, sad, angry, neutral) — для всех провайдеров
+        provider: явное указание провайдера ("elevenlabs", "google", "edge" или "piper")
     
     Returns:
         Audio bytes (MP3 или WAV в зависимости от провайдера)
     """
     # Определяем провайдер по voice_id или явному указанию
-    if provider == "piper" or (voice_id and not voice_id.startswith("google_") and not voice_id.startswith("edge_")):
-        # Явно Piper или voice_id не из Google/Edge
+    if provider == "piper" or (voice_id and not voice_id.startswith("elevenlabs_") and not voice_id.startswith("google_") and not voice_id.startswith("edge_")):
+        # Явно Piper или voice_id не из ElevenLabs/Google/Edge
         voice = resolve_voice(voice_id, language)
         if not voice:
             raise ValueError("No Piper voice available")
         return await synthesize_wav_piper(text, voice)
     
-    # 1️⃣ Пробуем Google Cloud TTS (primary, best quality)
+    # 🌟 1️⃣ Пробуем ElevenLabs (premium, best quality, emotions)
+    from app.voice.elevenlabs_provider import (
+        HTTPX_AVAILABLE as ELEVENLABS_AVAILABLE,
+        resolve_elevenlabs_voice,
+        synthesize_elevenlabs_mp3,
+    )
+    
+    if ELEVENLABS_AVAILABLE and provider != "google" and provider != "edge":
+        elevenlabs_voice = resolve_elevenlabs_voice(voice_id, language)
+        if elevenlabs_voice:
+            try:
+                log.info("Trying ElevenLabs TTS: voice=%s emotion=%s", elevenlabs_voice.id, emotion)
+                return await synthesize_elevenlabs_mp3(text, elevenlabs_voice, emotion, CACHE_DIR)
+            except Exception as e:
+                log.warning("ElevenLabs TTS failed (%s), falling back to Google TTS", e)
+    
+    # 2️⃣ Fallback на Google Cloud TTS (premium, best free tier)
     from app.voice.google_provider import (
         GOOGLE_TTS_AVAILABLE,
         resolve_google_voice,
         synthesize_google_wav,
     )
     
-    if GOOGLE_TTS_AVAILABLE and provider != "edge":
+    if GOOGLE_TTS_AVAILABLE and provider != "edge" and provider != "elevenlabs":
         google_voice = resolve_google_voice(voice_id, language)
         if google_voice:
             try:
@@ -279,14 +295,14 @@ async def synthesize_wav(
             except Exception as e:
                 log.warning("Google TTS failed (%s), falling back to Edge TTS", e)
     
-    # 2️⃣ Fallback на Edge TTS (free, good quality, может быть заблокирован)
+    # 3️⃣ Fallback на Edge TTS (free, good quality, может быть заблокирован)
     from app.voice.edge_provider import (
         EDGE_AVAILABLE,
         resolve_edge_voice,
         synthesize_edge_wav,
     )
     
-    if EDGE_AVAILABLE and provider != "google":
+    if EDGE_AVAILABLE and provider != "google" and provider != "elevenlabs":
         edge_voice = resolve_edge_voice(voice_id, language)
         if edge_voice:
             try:
@@ -295,9 +311,9 @@ async def synthesize_wav(
             except Exception as e:
                 log.warning("Edge TTS failed (%s), falling back to Piper", e)
     
-    # 3️⃣ Last resort: Piper (local, basic quality, always works)
+    # 4️⃣ Last resort: Piper (local, basic quality, always works)
     log.info("Using Piper fallback")
     voice = resolve_voice(voice_id, language)
     if not voice:
-        raise RuntimeError("No voice provider available (Google, Edge, and Piper all failed or unavailable)")
+        raise RuntimeError("No voice provider available (all TTS providers failed or unavailable)")
     return await synthesize_wav_piper(text, voice)
