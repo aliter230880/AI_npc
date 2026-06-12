@@ -94,17 +94,8 @@ def voices() -> list[VoiceRead]:
             )
         )
     
-    # Piper голоса (fallback, базовое качество)
-    for v in tts.list_voices():
-        result.append(
-            VoiceRead(
-                id=v.id,
-                name=f"{v.name} (Piper fallback)",
-                language=v.language,
-                gender=v.gender,
-                style=v.style,
-            )
-        )
+    # Piper голоса скрыты из выпадушки (слишком механические),
+    # но остаются как fallback в коде синтеза
     
     return result
 

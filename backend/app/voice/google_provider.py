@@ -136,43 +136,7 @@ GOOGLE_VOICES: dict[str, GoogleVoice] = {
         google_voice_id="ru-RU-Wavenet-D",
         voice_type="WaveNet",
     ),
-    # RUSSIAN STANDARD (4 млн/мес бесплатно, неплохое качество)
-    "google_ru_female_standard_a": GoogleVoice(
-        id="google_ru_female_standard_a",
-        name="Standard A — женский",
-        language="ru",
-        gender="female",
-        style="calm",
-        google_voice_id="ru-RU-Standard-A",
-        voice_type="Standard",
-    ),
-    "google_ru_female_standard_c": GoogleVoice(
-        id="google_ru_female_standard_c",
-        name="Standard C — женский дружелюбный",
-        language="ru",
-        gender="female",
-        style="cheerful",
-        google_voice_id="ru-RU-Standard-C",
-        voice_type="Standard",
-    ),
-    "google_ru_male_standard_b": GoogleVoice(
-        id="google_ru_male_standard_b",
-        name="Standard B — мужской",
-        language="ru",
-        gender="male",
-        style="calm",
-        google_voice_id="ru-RU-Standard-B",
-        voice_type="Standard",
-    ),
-    "google_ru_male_standard_d": GoogleVoice(
-        id="google_ru_male_standard_d",
-        name="Standard D — мужской уверенный",
-        language="ru",
-        gender="male",
-        style="professional",
-        google_voice_id="ru-RU-Standard-D",
-        voice_type="Standard",
-    ),
+    # Standard голоса скрыты (слишком механические, оставлены только Neural2/WaveNet)
 }
 
 DEFAULT_GOOGLE_VOICE_BY_LANG = {
