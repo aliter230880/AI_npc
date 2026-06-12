@@ -14,7 +14,9 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -234,7 +236,6 @@ async def synthesize_yandex_wav(
             
             # Yandex API v3 возвращает JSON с base64-encoded audio
             try:
-                import base64
                 response_json = resp.json()
                 # Извлекаем base64 audio из результата
                 audio_content = response_json.get("result", {}).get("audioChunk", {}).get("data")
