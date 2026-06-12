@@ -81,8 +81,13 @@ export default function Builder() {
     if (!form.voice_id) return;
     setPreviewing(true);
     try {
+      // Определяем пол по voice_id (female/male в названии)
+      const isFemale = form.voice_id.includes('female');
+      
       const sample = form.language === "ru"
-        ? "Привет! Вот так звучит мой голос. Рад знакомству."
+        ? (isFemale 
+            ? "Привет! Вот так звучит мой голос. Рада знакомству." 
+            : "Привет! Вот так звучит мой голос. Рад знакомству.")
         : "Hello there. This is how my voice sounds. Nice to meet you.";
       const params = new URLSearchParams({ text: sample, voice: form.voice_id });
       const audio = new Audio(`${API_BASE}/voice/tts?${params.toString()}`);
