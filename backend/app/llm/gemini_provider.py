@@ -85,7 +85,7 @@ class GeminiProvider(LLMProvider):
             raise RuntimeError("GEMINI_API_KEY is not set")
         self._api_key = s.gemini_api_key
         self._base_url = "https://generativelanguage.googleapis.com/v1beta"
-        self._default_model = s.gemini_default_model or "gemini-2.0-flash-exp"
+        self._default_model = s.gemini_default_model or "gemini-3.5-flash"
 
     def _convert_messages(self, messages: list[ChatMessage]) -> tuple[str | None, list[dict]]:
         """Конвертация OpenAI-формата в Gemini.

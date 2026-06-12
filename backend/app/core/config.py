@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     
     # Google Gemini (direct API, free tier)
     gemini_api_key: str = ""
-    gemini_default_model: str = "gemini-2.0-flash-exp"
+    gemini_default_model: str = "gemini-3.5-flash"
 
     # Memory (Qdrant + sentence-transformers)
     qdrant_url: str = "http://127.0.0.1:6333"
