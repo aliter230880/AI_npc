@@ -136,6 +136,43 @@ GOOGLE_VOICES: dict[str, GoogleVoice] = {
         google_voice_id="ru-RU-Wavenet-D",
         voice_type="WaveNet",
     ),
+    # RUSSIAN STANDARD (4 млн/мес бесплатно, неплохое качество)
+    "google_ru_female_standard_a": GoogleVoice(
+        id="google_ru_female_standard_a",
+        name="Standard A — женский",
+        language="ru",
+        gender="female",
+        style="calm",
+        google_voice_id="ru-RU-Standard-A",
+        voice_type="Standard",
+    ),
+    "google_ru_female_standard_c": GoogleVoice(
+        id="google_ru_female_standard_c",
+        name="Standard C — женский дружелюбный",
+        language="ru",
+        gender="female",
+        style="cheerful",
+        google_voice_id="ru-RU-Standard-C",
+        voice_type="Standard",
+    ),
+    "google_ru_male_standard_b": GoogleVoice(
+        id="google_ru_male_standard_b",
+        name="Standard B — мужской",
+        language="ru",
+        gender="male",
+        style="calm",
+        google_voice_id="ru-RU-Standard-B",
+        voice_type="Standard",
+    ),
+    "google_ru_male_standard_d": GoogleVoice(
+        id="google_ru_male_standard_d",
+        name="Standard D — мужской уверенный",
+        language="ru",
+        gender="male",
+        style="professional",
+        google_voice_id="ru-RU-Standard-D",
+        voice_type="Standard",
+    ),
 }
 
 DEFAULT_GOOGLE_VOICE_BY_LANG = {
@@ -214,29 +251,40 @@ def resolve_google_voice(voice_id: str | None, language: str | None = None) -> G
 def _build_ssml(text: str, voice: GoogleVoice, emotion: str | None = None) -> str:
     """Собираем SSML для Google TTS с учётом эмоции.
     
-    Эмоции через <prosody> теги:
-    - happy, cheerful → pitch +5%, rate +10%
-    - sad, confused → pitch -5%, rate -10%
-    - angry, scared → pitch +10%, rate +15%
+    Эмоции через <prosody> теги (усиленные параметры для заметности):
+    - happy, cheerful → pitch +15%, rate +15% (весёлый, быстрый)
+    - sad, confused → pitch -15%, rate -20% (грустный, медленный)
+    - angry → pitch +20%, rate +25%, volume +6dB (громкий, резкий)
+    - scared → pitch +25%, rate +30% (высокий, быстрый)
+    - flirty → pitch +10%, rate -10% (томный, медленный)
+    - surprised → pitch +20%, rate +20% (удивлённый)
     - neutral → без изменений
     """
     pitch = "+0%"
-    rate = "+0%"
+    rate = "100%"
+    volume = "+0dB"
     
     if emotion:
         emotion_lower = emotion.lower()
         if emotion_lower in ("happy", "cheerful", "excited"):
-            pitch = "+5%"
-            rate = "+10%"
+            pitch = "+15%"
+            rate = "115%"
         elif emotion_lower in ("sad", "confused", "tired"):
-            pitch = "-5%"
-            rate = "-10%"
-        elif emotion_lower in ("angry", "scared", "surprised"):
-            pitch = "+10%"
-            rate = "+15%"
+            pitch = "-15%"
+            rate = "80%"
+        elif emotion_lower == "angry":
+            pitch = "+20%"
+            rate = "125%"
+            volume = "+6dB"
+        elif emotion_lower == "scared":
+            pitch = "+25%"
+            rate = "130%"
         elif emotion_lower == "flirty":
-            pitch = "+3%"
-            rate = "+5%"
+            pitch = "+10%"
+            rate = "90%"
+        elif emotion_lower == "surprised":
+            pitch = "+20%"
+            rate = "120%"
     
     # Экранируем XML спецсимволы
     safe_text = (
@@ -248,7 +296,7 @@ def _build_ssml(text: str, voice: GoogleVoice, emotion: str | None = None) -> st
     )
     
     ssml = f"""<speak>
-    <prosody pitch="{pitch}" rate="{rate}">
+    <prosody pitch="{pitch}" rate="{rate}" volume="{volume}">
         {safe_text}
     </prosody>
 </speak>"""

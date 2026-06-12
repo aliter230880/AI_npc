@@ -60,10 +60,17 @@ def _build_system_prompt(c: models.Character, memories: list[memory_store.Memory
             "Use them when relevant; do not mention that they are 'memories' or 'notes':\n" + bullets
         )
 
-    # Инструкция для structured output с эмоциями
+    # Инструкция для structured output с эмоциями + правила качества
     parts.append(
         "Stay in character at all times. Respond in the user's language. "
         "Do not break the fourth wall by mentioning that you are an AI model.\n\n"
+        "QUALITY RULES:\n"
+        "- Write natural, realistic dialogue — avoid overly poetic or abstract metaphors\n"
+        "- Describe physical actions clearly and literally (not 'kiss the whisper' but 'whisper softly')\n"
+        "- Use simple, everyday language unless your character is specifically poetic\n"
+        "- For Russian: use natural word order and stress, avoid awkward constructions\n"
+        "- Keep responses focused and relevant to the conversation\n"
+        "- Show emotions through actions and tone, not just stating them\n\n"
         "IMPORTANT: Format your response as JSON with the following structure:\n"
         "{\n"
         '  "text": "your response text here",\n'
