@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     llm_default_model: str = "mistralai/mistral-nemo"
     openrouter_http_referer: str = "https://character.local"
     openrouter_app_title: str = "Character Platform"
+    
+    # Google Gemini (direct API, free tier)
+    gemini_api_key: str = ""
+    gemini_default_model: str = "gemini-2.0-flash-exp"
 
     # Memory (Qdrant + sentence-transformers)
     qdrant_url: str = "http://127.0.0.1:6333"
